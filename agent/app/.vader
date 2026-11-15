@@ -1,0 +1,43 @@
+{
+  "notes": "",
+  "structure": [
+    {
+      "path": "__init__.py",
+      "kind": "file",
+      "size": 25
+    },
+    {
+      "path": "cuboid_decorator.py",
+      "kind": "file",
+      "size": 3719
+    },
+    {
+      "path": "graphchain.py",
+      "kind": "file",
+      "size": 840
+    },
+    {
+      "path": "main.py",
+      "kind": "file",
+      "size": 8741
+    },
+    {
+      "path": "models.py",
+      "kind": "file",
+      "size": 744
+    },
+    {
+      "path": "rag.py",
+      "kind": "file",
+      "size": 723
+    },
+    {
+      "path": "workspace.py",
+      "kind": "file",
+      "size": 3953
+    }
+  ],
+  "important_files": [],
+  "workspace": "agent/app",
+  "updated_at": "2026-11-15T03:46:48.541815+00:00"
+}

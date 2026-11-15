@@ -1,0 +1,178 @@
+{
+  "notes": "",
+  "structure": [
+    {
+      "path": ".env",
+      "kind": "file",
+      "size": 965
+    },
+    {
+      "path": ".gitignore",
+      "kind": "file",
+      "size": 4910
+    },
+    {
+      "path": ".vader",
+      "kind": "file",
+      "size": 2591
+    },
+    {
+      "path": "README.md",
+      "kind": "file",
+      "size": 1449
+    },
+    {
+      "path": "agent",
+      "kind": "directory"
+    },
+    {
+      "path": "agent/Dockerfile",
+      "kind": "file",
+      "size": 204
+    },
+    {
+      "path": "agent/app",
+      "kind": "directory"
+    },
+    {
+      "path": "agent/app/__init__.py",
+      "kind": "file",
+      "size": 25
+    },
+    {
+      "path": "agent/app/graphchain.py",
+      "kind": "file",
+      "size": 840
+    },
+    {
+      "path": "agent/app/main.py",
+      "kind": "file",
+      "size": 8084
+    },
+    {
+      "path": "agent/app/models.py",
+      "kind": "file",
+      "size": 744
+    },
+    {
+      "path": "agent/app/rag.py",
+      "kind": "file",
+      "size": 723
+    },
+    {
+      "path": "agent/app/workspace.py",
+      "kind": "file",
+      "size": 3953
+    },
+    {
+      "path": "agent/requirements.txt",
+      "kind": "file",
+      "size": 116
+    },
+    {
+      "path": "docker-compose.yml",
+      "kind": "file",
+      "size": 2010
+    },
+    {
+      "path": "figury.py",
+      "kind": "file",
+      "size": 2505
+    },
+    {
+      "path": "model",
+      "kind": "directory"
+    },
+    {
+      "path": "model-server",
+      "kind": "directory"
+    },
+    {
+      "path": "model-server/Dockerfile",
+      "kind": "file",
+      "size": 195
+    },
+    {
+      "path": "model-server/app.py",
+      "kind": "file",
+      "size": 1746
+    },
+    {
+      "path": "pyproject.toml",
+      "kind": "file",
+      "size": 90
+    },
+    {
+      "path": "two_wys.md",
+      "kind": "file",
+      "size": 3935
+    },
+    {
+      "path": "ui",
+      "kind": "directory"
+    },
+    {
+      "path": "ui/Dockerfile",
+      "kind": "file",
+      "size": 143
+    },
+    {
+      "path": "ui/index.html",
+      "kind": "file",
+      "size": 71
+    },
+    {
+      "path": "ui/package.json",
+      "kind": "file",
+      "size": 241
+    },
+    {
+      "path": "ui/src",
+      "kind": "directory"
+    },
+    {
+      "path": "ui/src/App.vue",
+      "kind": "file",
+      "size": 6499
+    },
+    {
+      "path": "ui/src/main.js",
+      "kind": "file",
+      "size": 135
+    },
+    {
+      "path": "ui/vite.config.js",
+      "kind": "file",
+      "size": 123
+    }
+  ],
+  "important_files": [],
+  "workspace": ".",
+  "updated_at": "2026-11-15T03:27:49.835577+00:00",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hej"
+    },
+    {
+      "role": "assistant",
+      "content": "Hej! W czym mogę pomóc?"
+    },
+    {
+      "role": "user",
+      "content": "czy zasz sie na autcad\n"
+    },
+    {
+      "role": "assistant",
+      "content": "Nie zaszedłem jeszcze do AutoCAD, ale mogę pomóc Ci w nauce lub zrozumieniu poleceń 3D w AutoCAD. Czy chcesz, żebym pomógł Ci zrozumieć jak używać poleceń takich jak 3D Array, 3D Mirror, 3D Rotate, 3D Scale czy 3D Move? Możemy też omówić jak pracować z Gizmo w 3D. Czy masz konkretny problem z AutoCAD, który chciałbyś rozwiązać?"
+    },
+    {
+      "role": "user",
+      "content": "tak jak napisać funckje w pythonie zeby zrobiła mi zdajesi ze json do otocada dla swirzenia dowolnego graniastosłupa"
+    },
+    {
+      "role": "assistant",
+      "content": "Aby stworzyć funkcję w Pythonie, która wygeneruje dane w formacie JSON do otwarcia w AutoCAD dla obracania dowolnego graniastosłupa, musimy zrozumieć, że AutoCAD wymaga konkretnego formatu danych, np. w formacie DWG lub jako dane wejściowe do poleceń takich jak 3D Rotate. W tym przypadku, najlepszym podejściem będzie stworzenie funkcji, która generuje dane w formacie JSON, zawierające informacje o graniastosłupie (wysokość, szerokość, głębokość, pozycja) oraz kąt obrotu. Poniżej przedstawiam przykładową implementację funkcji w Pythonie, która generuje dane JSON do AutoCAD."
+    }
+  ]
+}

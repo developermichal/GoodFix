@@ -1,0 +1,81 @@
+name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  agent:
+    build: ./agent
+    environment:
+      WORKSPACE_ROOT: ${WORKSPACE_CONTAINER_PATH}
+      MODEL_SERVER_URL: ${MODEL_SERVER_URL}
+      MODEL_SERVER_MODEL: ${MODEL_FILENAME}
+      N_CTX: ${N_CTX}
+      N_GPU_LAYERS: ${N_GPU_LAYERS}
+      TENSOR_SPLIT: ${TENSOR_SPLIT}
+      CHROMA_HOST: ${CHROMA_HOST}
+      CHROMA_PORT: ${CHROMA_PORT}
+      SESSION_AUTOSAVE_SECONDS: ${SESSION_AUTOSAVE_SECONDS}
+    volumes:
+      - ${WORKSPACE_HOST_PATH}:${WORKSPACE_CONTAINER_PATH}
+    ports:
+      - "${AGENT_HOST_PORT}:${AGENT_CONTAINER_PORT}"
+    depends_on:
+      model-server:
+        condition: service_started
+      chroma:
+        condition: service_started
+
+  model-server:
+    build: ./model-server
+    command:
+      - --model
+      - ${MODEL_CONTAINER_PATH}/${MODEL_FILENAME}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${MODEL_CONTAINER_PORT}"
+      - --n-gpu-layers
+      - "${N_GPU_LAYERS}"
+      - --tensor-split
+      - "${TENSOR_SPLIT}"
+      - --split-mode
+      - layer
+      - --ctx-size
+      - "${N_CTX}"
+      - --parallel
+      - "1"
+      - --flash-attn
+      - "on"
+      - --no-webui
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
+    volumes:
+      - ${MODEL_HOST_PATH}:${MODEL_CONTAINER_PATH}:ro
+    ports:
+      - "${MODEL_HOST_PORT}:${MODEL_CONTAINER_PORT}"
+    gpus: all
+    shm_size: ${MODEL_SHM_SIZE}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  chroma:
+    image: ${CHROMA_IMAGE}
+    environment:
+      IS_PERSISTENT: ${CHROMA_IS_PERSISTENT}
+      PERSIST_DIRECTORY: ${CHROMA_CONTAINER_PATH}
+      ANONYMIZED_TELEMETRY: ${CHROMA_ANONYMIZED_TELEMETRY}
+    volumes:
+      - "${CHROMA_DATA_PATH}:${CHROMA_CONTAINER_PATH}"
+    ports:
+      - "${CHROMA_HOST_PORT}:${CHROMA_CONTAINER_PORT}"
+
+  ui:
+    build: ./ui
+    environment:
+      VITE_AGENT_API: http://localhost:${AGENT_HOST_PORT}
+    ports:
+      - "${UI_HOST_PORT}:5173"
+    depends_on:
+      - agent

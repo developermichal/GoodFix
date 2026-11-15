@@ -1,0 +1,8 @@
+{
+  "name": "goodfix-agent-ui",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite" },
+  "dependencies": { "@vitejs/plugin-vue": "latest", "vite": "latest", "vue": "latest", "bootstrap": "latest" },
+  "devDependencies": {}
+}

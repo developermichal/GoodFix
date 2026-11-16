@@ -2,7 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+.agent_sessions
 # C extensions
 *.so
 model/

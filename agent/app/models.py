@@ -35,6 +35,8 @@ class ChatResponse(BaseModel):
     tool_calls: list[ToolCall] = []
     rag_count: int = 0
     session_id: str
+    trace: list[dict[str, Any]] = []
+    token_usage: dict[str, int] = {}
 
 
 class FileEntry(BaseModel):

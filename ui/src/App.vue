@@ -16,6 +16,11 @@ const sessions = ref([])
 const pdfInput = ref(null)
 const settings = ref(null)
 const showSettings = ref(false)
+const scale = ref(Number(localStorage.getItem('goodfix-ui-scale') || 150))
+const trace = ref([])
+const tokenUsage = ref({})
+const metrics = ref(null)
+const ragInfo = ref(null)
 
 async function createSession() {
   const response = await fetch(`${api}/api/sessions`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({workspace: workspace.value}) })
@@ -25,7 +30,7 @@ async function loadSessions() { sessions.value = await (await fetch(`${api}/api/
 async function openSession(id) {
   if (!id) return
   const data = await (await fetch(`${api}/api/sessions/${id}`)).json()
-  sessionId.value = data.session_id; workspace.value = data.context.workspace || '.'; await loadTree()
+  sessionId.value = data.session_id; workspace.value = data.context.workspace || '.'; await loadTree(); await loadObservability()
 }
 async function uploadPdf() {
   if (!pdfInput.value?.files?.[0]) return
@@ -33,25 +38,27 @@ async function uploadPdf() {
   await fetch(`${api}/api/knowledge/pdf`, {method:'POST', body: form}); pdfInput.value.value = ''
 }
 async function loadTree() { tree.value = await (await fetch(`${api}/api/tree?path=${encodeURIComponent(workspace.value)}`)).json() }
-async function loadSettings() { settings.value = await (await fetch(`${api}/api/settings`)).json() }
+async function loadSettings() { settings.value = await (await fetch(`${api}/api/settings`)).json(); metrics.value = settings.value.metrics; ragInfo.value = settings.value.rag }
+async function loadObservability() { if (!sessionId.value) return; const data = await (await fetch(`${api}/api/observability/${sessionId.value}`)).json(); trace.value = data.trace || []; metrics.value = data.metrics; ragInfo.value = data.rag }
 async function openFile(path) { selected.value = path; content.value = (await (await fetch(`${api}/api/file?path=${encodeURIComponent(workspace.value + '/' + path)}`)).json()).content }
 async function saveFile() { await fetch(`${api}/api/file`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path: workspace.value + '/' + selected.value, content: content.value})}); await loadTree() }
 async function send() {
   if (!message.value || !sessionId.value) return
   busy.value = true
   const data = await (await fetch(`${api}/api/chat`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId.value, message: message.value})})).json()
-  answer.value = data.answer; ragCount.value = data.rag_count; toolCalls.value = data.tool_calls || []; message.value = ''; busy.value = false
+  answer.value = data.answer; ragCount.value = data.rag_count; toolCalls.value = data.tool_calls || []; trace.value = [...trace.value, {at: Date.now() / 1000, request: message.value, steps: data.trace || [], token_usage: data.token_usage || {}}]; tokenUsage.value = data.token_usage || {}; message.value = ''; await loadObservability(); busy.value = false
 }
+function setScale(value) { scale.value = value; localStorage.setItem('goodfix-ui-scale', String(value)) }
 function actionTitle(call) {
   const labels = { write_file: 'Utworzono lub zapisano plik', patch_file: 'Zmieniono plik', read_file: 'Odczytano plik', list_tree: 'Przeanalizowano strukturę' }
   return labels[call.name] || `Wykonano ${call.name}`
 }
 function actionPath(call) { return call.arguments?.path || call.arguments?.relative_path || '' }
-onMounted(async () => { await createSession(); await loadSessions(); await loadSettings() })
+onMounted(async () => { await createSession(); await loadSessions(); await loadSettings(); await loadObservability(); setInterval(loadSettings, 5000) })
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :style="{ '--ui-scale': `${scale}%` }">
     <nav class="navbar navbar-dark bg-dark px-3 py-2 gap-2 app-toolbar">
       <span class="navbar-brand mb-0">GoodFix Agent</span>
       <input v-model="workspace" class="form-control workspace-input" placeholder="Katalog workspace"/>
@@ -62,16 +69,20 @@ onMounted(async () => { await createSession(); await loadSessions(); await loadS
       <button class="btn btn-outline-info settings-button" @click="showSettings = !showSettings">Ustawienia</button>
     </nav>
     <section v-if="showSettings" class="settings-panel card shadow" aria-label="Ustawienia agenta">
-      <div class="card-header d-flex justify-content-between align-items-center"><strong>Ustawienia z .env</strong><button class="btn btn-sm btn-outline-secondary" @click="showSettings = false">Zamknij</button></div>
+      <div class="card-header d-flex justify-content-between align-items-center"><strong>Ustawienia i diagnostyka</strong><button class="btn btn-sm btn-outline-secondary" @click="showSettings = false">Zamknij</button></div>
+      <div class="settings-section"><div class="section-label">Skalowanie interfejsu</div><div class="scale-options"><button v-for="value in [125, 150, 175, 200]" :key="value" class="btn" :class="scale === value ? 'btn-primary' : 'btn-outline-primary'" @click="setScale(value)">{{ value }}%</button></div></div>
       <div v-if="settings" class="settings-grid">
         <div><span>Model</span><code>{{ settings.model }}</code></div>
-        <div><span>Kontekst</span><code>{{ settings.context_tokens }} tokenów</code></div>
+        <div><span>Kontekst</span><code>{{ tokenUsage.prompt_tokens || '—' }} / {{ settings.context_tokens }} tokenów</code></div>
         <div><span>Warstwy GPU</span><code>{{ settings.gpu_layers }}</code></div>
         <div><span>Podział GPU</span><code>{{ settings.tensor_split }}</code></div>
         <div><span>Autosave</span><code>{{ settings.autosave_seconds }} s</code></div>
         <div><span>Chroma</span><code>{{ settings.chroma }}</code></div>
       </div>
-      <div v-else class="p-3 text-muted">Ładowanie ustawień...</div>
+      <div v-if="metrics" class="diagnostics-grid"><div><span>RAM dostępna</span><code>{{ metrics.ram_available_gb }} / {{ metrics.ram_total_gb }} GB ({{ metrics.ram_used_percent }}%)</code></div><div><span>CPU</span><code>{{ metrics.cpu_percent }}%</code></div><div><span>Dysk workspace</span><code>{{ metrics.disk_free_gb }} GB</code></div><div><span>GPU</span><code v-if="metrics.gpu?.length">{{ metrics.gpu.map(g => `${g.name}: ${g.utilization_percent}% · ${g.memory_used_mb}/${g.memory_total_mb} MB`).join(' | ') }}</code><code v-else>{{ metrics.gpu_status || 'brak danych' }}</code></div></div>
+      <div v-if="ragInfo" class="settings-section"><div class="section-label">Pamięć RAG / Chroma</div><div>{{ ragInfo.documents }} fragmentów z {{ ragInfo.files?.length || 0 }} plików</div><small class="text-muted">{{ ragInfo.files?.join(', ') || 'Brak wgranych książek/dokumentów' }}</small></div>
+      <div class="settings-section log-section"><div class="section-label">Log kroków i tokenów</div><div v-if="trace.length" class="trace-list"><article v-for="(entry, index) in trace.slice().reverse()" :key="index" class="trace-entry"><strong>{{ entry.request }}</strong><small>{{ entry.token_usage?.total_tokens || 0 }} tokenów{{ entry.token_usage?.estimated ? ' (szacunek)' : '' }}</small><details><summary>{{ entry.steps?.length || 0 }} kroków</summary><pre>{{ JSON.stringify(entry.steps, null, 2) }}</pre></details></article></div><div v-else class="text-muted">Brak logów dla tej sesji.</div></div>
+      <div v-if="!settings" class="p-3 text-muted">Ładowanie ustawień...</div>
     </section>
     <main class="container-fluid py-3 workspace-main"><div class="row g-3 workspace-row">
       <aside class="col-12 col-lg-3 panel-column"><div class="card panel"><div class="card-header panel-title">Explorer <span class="badge bg-secondary">{{ tree.length }}</span></div><div class="list-group list-group-flush file-list"><button v-for="item in tree.filter(x => x.kind === 'file')" :key="item.path" class="list-group-item list-group-item-action" @click="openFile(item.path)">{{ item.path }}</button></div></div></aside>
@@ -84,7 +95,7 @@ onMounted(async () => { await createSession(); await loadSessions(); await loadS
 <style>
 :global(html), :global(body), :global(#app) { height: 100%; margin: 0; }
 :global(body) { min-width: 900px; background: #f4f6f9; font-size: 16px; overflow: hidden; }
-.app-shell { font-size: 150%; }
+.app-shell { font-size: calc(1rem * var(--ui-scale) / 100); }
 .app-shell { height: 100vh; display: flex; flex-direction: column; }
 .app-toolbar { flex: 0 0 auto; min-height: 64px; }
 .workspace-input { width: min(28vw, 360px); }
@@ -104,6 +115,18 @@ onMounted(async () => { await createSession(); await loadSessions(); await loadS
 .send-button { min-height: 44px; }
 .settings-button { margin-left: auto; white-space: nowrap; }
 .settings-panel { position: fixed; z-index: 20; top: 70px; right: 1rem; width: min(560px, calc(100vw - 2rem)); }
+.settings-panel { max-height: calc(100vh - 90px); overflow: auto; }
+.settings-section { padding: 1rem; border-top: 1px solid #dee2e6; }
+.section-label { font-weight: 700; margin-bottom: .5rem; }
+.scale-options { display: flex; gap: .5rem; flex-wrap: wrap; }
+.diagnostics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; padding: 0 1rem 1rem; }
+.diagnostics-grid div { display: flex; flex-direction: column; padding: .6rem; background: #f8f9fa; border-radius: .375rem; }
+.diagnostics-grid span { color: #6c757d; font-size: .75em; }
+.diagnostics-grid code { overflow-wrap: anywhere; }
+.trace-list { max-height: 260px; overflow: auto; }
+.trace-entry { display: grid; gap: .25rem; padding: .6rem; margin-top: .5rem; background: #f8f9fa; border-radius: .375rem; }
+.trace-entry small { color: #6c757d; }
+.trace-entry pre { white-space: pre-wrap; font-size: .75em; margin: .4rem 0 0; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; padding: 1rem; }
 .settings-grid div { display: flex; flex-direction: column; gap: .2rem; padding: .65rem; background: #f8f9fa; border-radius: .375rem; }
 .settings-grid span { color: #6c757d; font-size: .75em; }

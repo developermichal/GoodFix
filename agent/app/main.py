@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
+import subprocess
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -11,6 +14,7 @@ import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pypdf import PdfReader
+import psutil
 
 from .graphchain import GraphChain, GraphState
 from .models import ChatRequest, ChatResponse, FilePatchRequest, FileWriteRequest, SessionCreate, ToolCall
@@ -24,6 +28,30 @@ model_url = os.getenv("MODEL_SERVER_URL", "http://model-server:8000")
 model_name = os.getenv("MODEL_SERVER_MODEL", "model")
 rag = RAGStore(os.getenv("CHROMA_HOST", "chroma"), int(os.getenv("CHROMA_PORT", "8000")))
 sessions: dict[str, dict[str, Any]] = {}
+
+
+def system_metrics() -> dict[str, Any]:
+    memory = psutil.virtual_memory()
+    result: dict[str, Any] = {
+        "ram_total_gb": round(memory.total / 1024**3, 2),
+        "ram_available_gb": round(memory.available / 1024**3, 2),
+        "ram_used_percent": memory.percent,
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "disk_free_gb": round(shutil.disk_usage(workspace.root).free / 1024**3, 2),
+        "gpu": [],
+    }
+    try:
+        completed = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu",
+             "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=2, check=True
+        )
+        for line in completed.stdout.splitlines():
+            name, used, total, utilization, temperature = [part.strip() for part in line.split(",")]
+            result["gpu"].append({"name": name, "memory_used_mb": int(used), "memory_total_mb": int(total),
+                                  "utilization_percent": int(utilization), "temperature_c": int(temperature)})
+    except (FileNotFoundError, subprocess.SubprocessError, ValueError):
+        result["gpu_status"] = "nvidia-smi niedostępne w kontenerze"
+    return result
 
 
 def error(error: Exception) -> HTTPException:
@@ -47,7 +75,17 @@ def public_settings() -> dict[str, Any]:
         "autosave_seconds": int(os.getenv("SESSION_AUTOSAVE_SECONDS", "120")),
         "workspace": os.getenv("WORKSPACE_ROOT", "/workspace"),
         "chroma": f"{os.getenv('CHROMA_HOST', 'chroma')}:{os.getenv('CHROMA_PORT', '8000')}",
+        "metrics": system_metrics(),
+        "rag": rag.stats(),
     }
+
+
+@app.get("/api/observability/{session_id}")
+def observability(session_id: str) -> dict[str, Any]:
+    session = sessions.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Sesja nie istnieje")
+    return {"trace": session.get("trace", []), "metrics": system_metrics(), "rag": rag.stats()}
 
 
 @app.post("/api/sessions")
@@ -62,6 +100,7 @@ def create_session(request: SessionCreate) -> dict[str, Any]:
         saved_context = json.loads(saved.read_text(encoding="utf-8"))
         context.update(saved_context)
     sessions[session_id] = {"id": session_id, "context": context, "messages": context.get("messages", [])}
+    sessions[session_id]["trace"] = context.get("trace", [])
     return {"session_id": session_id, "context": context}
 
 
@@ -125,14 +164,21 @@ async def add_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
     return {"filename": file.filename, "chunks": len(chunks)}
 
 
-async def call_model(messages: list[dict[str, str]]) -> str:
+async def call_model(messages: list[dict[str, str]]) -> tuple[str, dict[str, int]]:
     async with httpx.AsyncClient(timeout=300) as client:
         response = await client.post(
             f"{model_url}/v1/chat/completions",
             json={"model": model_name, "messages": messages, "temperature": 0.2},
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        payload = response.json()
+        usage = payload.get("usage") or {}
+        if not usage:
+            prompt_tokens = sum(max(1, len(item["content"]) // 4) for item in messages)
+            completion = payload["choices"][0]["message"]["content"]
+            usage = {"prompt_tokens": prompt_tokens, "completion_tokens": max(1, len(completion) // 4),
+                     "total_tokens": prompt_tokens + max(1, len(completion) // 4), "estimated": 1}
+        return payload["choices"][0]["message"]["content"], {key: int(value) for key, value in usage.items() if isinstance(value, (int, float))}
 
 
 def extract_actions(answer: str) -> list[dict[str, Any]]:
@@ -173,9 +219,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
     session = sessions.get(request.session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Sesja nie istnieje")
-    state = GraphState({"request": request.message, "session": session, "rag": [], "answer": ""})
+    trace: list[dict[str, Any]] = []
+    state = GraphState({"request": request.message, "session": session, "rag": [], "answer": "", "token_usage": {}})
     graph = GraphChain()
-    graph.add("rag_search", lambda s: s.values.update(rag=rag.search(s.values["request"])))
+    def rag_node(s: GraphState) -> None:
+        started = time.perf_counter(); s.values["rag"] = rag.search(s.values["request"])
+        trace.append({"step": "rag_search", "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                      "details": {"results": len(s.values["rag"])}})
+    graph.add("rag_search", rag_node)
 
     async def model_node(s: GraphState) -> None:
         context = json.dumps(s.values["session"]["context"], ensure_ascii=False)
@@ -183,16 +234,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
             "Jeśli trzeba zmienić pliki, odpowiedz wyłącznie JSON-em: " \
             "{\"answer\":\"opis\",\"actions\":[{\"name\":\"write_file|patch_file|read_file|list_tree\",\"arguments\":{}}]}. " \
             "Ścieżki są względne wobec workspace."
-        s.values["answer"] = await call_model([
+        started = time.perf_counter()
+        s.values["answer"], s.values["token_usage"] = await call_model([
             {"role": "system", "content": "Jesteś aktywnym agentem programistycznym. Pracujesz wyłącznie w workspace."},
             {"role": "system", "content": prompt},
             {"role": "user", "content": s.values["request"]},
         ])
+        trace.append({"step": "model", "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                      "details": {**s.values["token_usage"], "tokens_per_second": round(
+                          s.values["token_usage"].get("completion_tokens", 0) / max(time.perf_counter() - started, 0.001), 2)}})
 
     graph.add("model", model_node)
     await graph.run(state)
     raw_answer = state.values["answer"]
     action_calls = execute_actions(extract_actions(raw_answer))
+    trace.append({"step": "actions", "duration_ms": 0, "details": {"count": len(action_calls),
+                                                                        "names": [call.name for call in action_calls]}})
     try:
         parsed = json.loads(raw_answer)
         answer = parsed.get("answer", raw_answer) if isinstance(parsed, dict) else raw_answer
@@ -200,8 +257,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
         answer = raw_answer
     session["messages"].extend([{"role": "user", "content": request.message}, {"role": "assistant", "content": answer}])
     session["context"]["messages"] = session["messages"][-20:]
+    session.setdefault("trace", []).append({"at": time.time(), "request": request.message, "steps": trace,
+                                             "token_usage": state.values["token_usage"]})
+    session["trace"] = session["trace"][-50:]
+    session["context"]["trace"] = session["trace"]
     workspace.save_session_context(request.session_id, session["context"])
-    return ChatResponse(answer=answer, tool_calls=action_calls, rag_count=len(state.values["rag"]), session_id=request.session_id)
+    return ChatResponse(answer=answer, tool_calls=action_calls, rag_count=len(state.values["rag"]), session_id=request.session_id,
+                        trace=trace, token_usage=state.values["token_usage"])
 
 
 async def autosave() -> None:

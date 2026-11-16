@@ -18,3 +18,9 @@ class RAGStore:
         self.collection.upsert(
             ids=[document_id], documents=[text], metadatas=[metadata or {}]
         )
+
+    def stats(self) -> dict:
+        count = self.collection.count()
+        metadatas = self.collection.get(include=["metadatas"]).get("metadatas", []) if count else []
+        files = sorted({item.get("filename") for item in metadatas if item and item.get("filename")})
+        return {"documents": count, "files": files, "collection": self.collection.name}

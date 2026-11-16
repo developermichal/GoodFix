@@ -1,6 +1,3 @@
 FROM ghcr.io/ggml-org/llama.cpp:server-cuda-b9544
 
-# The GGUF stays mounted read-only from the host instead of being copied into
-# every image build.
-EXPOSE 8000
-ENTRYPOINT ["/app/llama-server"]
+COPY model/Qwen3-Coder-30B-A3B-Instruct-Heretic.Q8_0.gguf /models/chappie.gguf

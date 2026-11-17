@@ -9,12 +9,12 @@
     {
       "path": ".gitignore",
       "kind": "file",
-      "size": 4890
+      "size": 4927
     },
     {
       "path": ".vader",
       "kind": "file",
-      "size": 2965
+      "size": 2892
     },
     {
       "path": "README.md",
@@ -57,17 +57,17 @@
     {
       "path": "agent/app/main.py",
       "kind": "file",
-      "size": 8741
+      "size": 12614
     },
     {
       "path": "agent/app/models.py",
       "kind": "file",
-      "size": 744
+      "size": 864
     },
     {
       "path": "agent/app/rag.py",
       "kind": "file",
-      "size": 723
+      "size": 1110
     },
     {
       "path": "agent/app/workspace.py",
@@ -77,12 +77,12 @@
     {
       "path": "agent/requirements.txt",
       "kind": "file",
-      "size": 116
+      "size": 136
     },
     {
       "path": "docker-compose.yml",
       "kind": "file",
-      "size": 2104
+      "size": 2185
     },
     {
       "path": "figury.py",
@@ -104,18 +104,14 @@
       "kind": "directory"
     },
     {
-      "path": "model-server",
-      "kind": "directory"
+      "path": "model/Dockerfile",
+      "kind": "file",
+      "size": 129
     },
     {
-      "path": "model-server/Dockerfile",
+      "path": "ps_docker_remove.ps1",
       "kind": "file",
-      "size": 195
-    },
-    {
-      "path": "model-server/app.py",
-      "kind": "file",
-      "size": 1746
+      "size": 6780
     },
     {
       "path": "pyproject.toml",
@@ -134,7 +130,7 @@
     {
       "path": "ui/Dockerfile",
       "kind": "file",
-      "size": 143
+      "size": 150
     },
     {
       "path": "ui/index.html",
@@ -153,7 +149,7 @@
     {
       "path": "ui/src/App.vue",
       "kind": "file",
-      "size": 10220
+      "size": 14131
     },
     {
       "path": "ui/src/main.js",
@@ -168,5 +164,5 @@
   ],
   "important_files": [],
   "workspace": ".",
-  "updated_at": "2026-11-15T20:10:17.732224+00:00"
+  "updated_at": "2026-11-16T10:36:47.771283+00:00"
 }

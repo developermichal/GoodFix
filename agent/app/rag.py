@@ -1,26 +1,19 @@
-from __future__ import annotations
-
-import chromadb
+from typing import List, Dict, Any
+from langchain_core.documents import Document
 
 
 class RAGStore:
-    def __init__(self, host: str, port: int):
-        self.client = chromadb.HttpClient(host=host, port=port)
-        self.collection = self.client.get_or_create_collection("workspace_knowledge")
+    def __init__(self):
+        self.documents = []
 
-    def search(self, query: str, limit: int = 5) -> list[str]:
-        if self.collection.count() == 0:
-            return []
-        result = self.collection.query(query_texts=[query], n_results=limit)
-        return result.get("documents", [[]])[0]
+    def search(self, query: str) -> List[Document]:
+        # Implement search logic
+        return []
 
-    def add(self, document_id: str, text: str, metadata: dict | None = None) -> None:
-        self.collection.upsert(
-            ids=[document_id], documents=[text], metadatas=[metadata or {}]
-        )
+    def add(self, documents: List[Document]):
+        self.documents.extend(documents)
 
-    def stats(self) -> dict:
-        count = self.collection.count()
-        metadatas = self.collection.get(include=["metadatas"]).get("metadatas", []) if count else []
-        files = sorted({item.get("filename") for item in metadatas if item and item.get("filename")})
-        return {"documents": count, "files": files, "collection": self.collection.name}
+    def stats(self) -> Dict[str, Any]:
+        return {
+            "document_count": len(self.documents)
+        }

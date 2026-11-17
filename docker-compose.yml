@@ -18,13 +18,13 @@ services:
     ports:
       - "${AGENT_HOST_PORT}:${AGENT_CONTAINER_PORT}"
     depends_on:
-      model-server:
+      model:
         condition: service_started
       chroma:
         condition: service_started
 
-  model-server:
-    build: ./model-server
+  model:
+    build: ./model
     command:
       - --model
       - ${MODEL_CONTAINER_PATH}/${MODEL_FILENAME}

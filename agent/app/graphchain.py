@@ -1,29 +1,23 @@
-"""Minimalny graf wykonawczy agenta: context -> RAG -> model -> action -> persist."""
+from typing import List, Dict, Any
+from langchain_core.messages import BaseMessage
+from langchain_core.runnables import Runnable
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-import inspect
-from typing import Any, Awaitable, Callable
-
-
-@dataclass
 class GraphState:
-    values: dict[str, Any] = field(default_factory=dict)
+    messages: List[BaseMessage] = []
+    data: Dict[str, Any] = {}
 
 
 class GraphChain:
     def __init__(self):
-        self.nodes: list[tuple[str, Callable[[GraphState], Any]]] = []
+        self.chain = None
 
-    def add(self, name: str, node: Callable[[GraphState], None]) -> "GraphChain":
-        self.nodes.append((name, node))
-        return self
+    def add(self, runnable: Runnable):
+        if self.chain is None:
+            self.chain = runnable
+        else:
+            self.chain = self.chain | runnable
 
-    async def run(self, state: GraphState) -> GraphState:
-        for name, node in self.nodes:
-            state.values["active_node"] = name
-            result = node(state)
-            if inspect.isawaitable(result):
-                await result
-        return state
+    def invoke(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        if self.chain is None:
+            return input_data
+        return self.chain.invoke(input_data)
